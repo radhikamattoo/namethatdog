@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 # Radhika Mattoo
 # Downloads and prepares the Stanford Dogs Dataset
-from bs4 import BeautifulSoup
 import scipy.io as sio
+import json
 import requests
 import tarfile
 import os
@@ -56,29 +56,29 @@ def split_data():
     train_list, test_list = convert_to_list(train_dict), convert_to_list(test_dict)
     mkdirs( ['data/train', 'data/val'] )
 
-    # TODO: Read in annotations
-    # Walk through annotations/ directory
-    # Get dog breed from directory name
-    # Make train/test dir with breed name
-    # Walk through xml files in each directory
-    # Check if file is in train or test and rename
-
-    # for download_path in train_list:
-    #     if os.path.exists(download_path):
-    #         filename = os.path.basename(download_path)
-    #         train_path = os.path.abspath(os.path.join('data/train/', filename))
-    #         print train_path
-    #         print download_path
-    #         os.rename(download_path, train_path)
-    #     else:
-    #         print 'File not found: ', download_path
-    # for download_path in test_list:
-    #     if os.path.exists(download_path):
-    #         filename = os.path.basename(download_path)
-    #         test_path = os.path.abspath(os.path.join('data/test/', filename))
-    #         os.rename(download_path, test_path)
-    #     else:
-    #         print 'File not found: ', download_path
+    # Walk through annotations directory
+    classes = []
+    image_path = 'data/images/'
+    train_path = 'data/train/'
+    test_path = 'data/val/'
+    for root, dirs, files in os.walk('data/annotations'):
+        for dir in dirs:
+            class_name = dir.split('-')[1]
+            classes.append(class_name)
+            os.mkdir('data/train/' + class_name)
+            os.mkdir('data/val/' + class_name)
+            for root_xml, dirs_xml, image_names in os.walk( os.path.join('data/annotations',  dir) ):
+                for image_name in image_names:
+                    image_name = image_name + '.jpg'
+                    old_img_path = os.path.abspath( os.path.join(image_path, image_name) )
+                    new_img_path = None
+                    if image_name in train_list:
+                        new_img_path = os.path.abspath( os.path.join(train_path + class_name + '/', image_name) )
+                    else:
+                        new_img_path = os.path.abspath( os.path.join(test_path + class_name + '/', image_name) )
+                    os.rename(old_img_path, new_img_path)
+    with open('data/annotations/classes.txt', 'w') as f:
+        json.dump(classes, f)
 
 # Create the given directories
 def mkdirs(names):
@@ -92,7 +92,7 @@ def convert_to_list(matlab_dict):
     file_list = []
     for item in matlab_dict:
         filepath = item[0][0]
-        file_list.append( os.path.abspath('data/images/' + filepath + '.jpg') )
+        file_list.append( filepath.split('/')[1] + '.jpg' )
     return file_list
 
 
