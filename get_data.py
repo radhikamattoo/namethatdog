@@ -99,5 +99,5 @@ def convert_to_list(matlab_dict):
 if __name__ == '__main__':
     if not os.path.exists('data/tars'):
         get_data()
-    # if not os.path.exists('data/train') and not os.path.exists('data/test'):
-    split_data()
+    if not os.path.exists('data/train') and not os.path.exists('data/test'):
+        split_data()
