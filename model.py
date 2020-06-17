@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
-# Radhika Mattoo
-#
+# Radhika Mattoo, rm3485@nyu.edu
+# Code taken from:
+# https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html#sphx-glr-beginner-transfer-learning-tutorial-py
+
 import time
 import os
 import copy
@@ -9,20 +11,15 @@ import torchvision
 import numpy as np
 import torch.nn as nn
 import torch.optim as optim
+from datetime import datetime
 import matplotlib.pyplot as plt
 import torchvision.models as models
 from torch.optim import lr_scheduler
 from torchvision import datasets, models, transforms
 
-# inception = models.inception_v3(pretrained=True)
-# print inception
-# Prepare the data for Inception
-
-
 # Read in data
 data_transforms = {
     'train': transforms.Compose([
-        transforms.Resize(224),
         transforms.RandomResizedCrop(224),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
@@ -30,20 +27,60 @@ data_transforms = {
     ]),
     'val': transforms.Compose([
         transforms.Resize(256),
+        transforms.CenterCrop(224),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ]),
+    'test': transforms.Compose([
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
 }
 
 data_dir = 'data'
 image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x),
                                           data_transforms[x])
-                  for x in ['train', 'val']}
+                  for x in ['train', 'val', 'test']}
 dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=4,
                                              shuffle=True, num_workers=4)
-              for x in ['train', 'val']}
-dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}
+              for x in ['train', 'val', 'test']}
+dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val', 'test']}
 class_names = image_datasets['train'].classes
+
+def printProgressBar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█'):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        length      - Optional  : character length of bar (Int)
+        fill        - Optional  : bar fill character (Str)
+    """
+    percent = ("{0:." + str(decimals) + "f}").format(100 *
+                                                     (iteration / float(total)))
+    filledLength = int(length * iteration // total)
+    bar = fill * filledLength + '-' * (length - filledLength)
+    print('\r %s |%s| %s%% %s' % (prefix, bar, percent, suffix), end='\r')
+    # Print New Line on Complete
+    if iteration == total:
+        print()
+
+def imshow(inp, title=None):
+    """Imshow for Tensor."""
+    inp = inp.numpy().transpose((1, 2, 0))
+    mean = np.array([0.485, 0.456, 0.406])
+    std = np.array([0.229, 0.224, 0.225])
+    inp = std * inp + mean
+    inp = np.clip(inp, 0, 1)
+    plt.imshow(inp)
+    if title is not None:
+        plt.title(title)
+    plt.pause(0.001)  # pause a bit so that plots are updated
 
 def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     since = time.time()
@@ -62,11 +99,15 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                 model.train()  # Set model to training mode
             else:
                 model.eval()   # Set model to evaluate mode
-
             running_loss = 0.0
             running_corrects = 0
 
             # Iterate over data.
+            step = 0
+            # total = len(dataloaders[phase].dataset)
+            total = 100
+            printProgressBar(step, total, prefix='Progress:',
+                             suffix='Complete', length=100)
             for inputs, labels in dataloaders[phase]:
                 inputs = inputs.to(device)
                 labels = labels.to(device)
@@ -78,7 +119,6 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                 # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
                     outputs = model(inputs)
-                    pri
                     _, preds = torch.max(outputs, 1)
                     loss = criterion(outputs, labels)
 
@@ -91,6 +131,12 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                 running_loss += loss.item() * inputs.size(0)
                 running_corrects += torch.sum(preds == labels.data)
 
+                step += 1
+                printProgressBar(step, total, prefix='Progress:',
+                                 suffix='Complete', length=100)
+                if step > total:
+                    break
+
             epoch_loss = running_loss / dataset_sizes[phase]
             epoch_acc = running_corrects.double() / dataset_sizes[phase]
 
@@ -102,7 +148,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                 best_acc = epoch_acc
                 best_model_wts = copy.deepcopy(model.state_dict())
 
-        print()
+        print( '\n')
 
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(
@@ -113,15 +159,18 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     model.load_state_dict(best_model_wts)
     return model
 
+def set_parameter_requires_grad(model, feature_extracting):
+    if feature_extracting:
+        for param in model.parameters():
+            param.requires_grad = False
 
-def visualize_model(model, num_images=6):
+def visualize_model(model, num_images=10):
     was_training = model.training
     model.eval()
     images_so_far = 0
     fig = plt.figure()
-
     with torch.no_grad():
-        for i, (inputs, labels) in enumerate(dataloaders['val']):
+        for i, (inputs, labels) in enumerate(dataloaders['test']):
             inputs = inputs.to(device)
             labels = labels.to(device)
 
@@ -139,52 +188,47 @@ def visualize_model(model, num_images=6):
                     model.train(mode=was_training)
                     return
         model.train(mode=was_training)
+
+def load_model_for_evaluation(model_pth_file):
+    model = torch.load(model_pth_file)
+    model.eval()
+    return model
+
 if __name__ == '__main__':
-    print 'Reading in model and resetting final layer'
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model_ft = models.inception_v3(pretrained=True)
-    num_ftrs = model_ft.fc.in_features
-    model_ft.fc = nn.Linear(num_ftrs, 2)
+    # model_conv = torchvision.models.resnet18(pretrained=True)
+    #
+    model_conv = load_model_for_evaluation('namethatdog_2020-06-17_1592410161.pt')
 
-    model_ft = model_ft.to(device)
-
-    criterion = nn.CrossEntropyLoss()
-
-    # Observe that all parameters are being optimized
-    optimizer_ft = optim.SGD(model_ft.parameters(), lr=0.001, momentum=0.9)
-
-    # Decay LR by a factor of 0.1 every 7 epochs
-    exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
-
-
-    model_ft = train_model(model_ft, criterion, optimizer_ft, exp_lr_scheduler,
-                           num_epochs=25)
-    visualize_model(model_ft)
-
-    print 'Freezing network...'
-    model_conv = torchvision.models.resnet18(pretrained=True)
     for param in model_conv.parameters():
         param.requires_grad = False
-
-    # Parameters of newly constructed modules have requires_grad=True by default
-    num_ftrs = model_conv.fc.in_features
-    model_conv.fc = nn.Linear(num_ftrs, 2)
-
-    model_conv = model_conv.to(device)
-
-    criterion = nn.CrossEntropyLoss()
-
-    # Observe that only parameters of final layer are being optimized as
-    # opoosed to before.
-    optimizer_conv = optim.SGD(model_conv.fc.parameters(), lr=0.001, momentum=0.9)
-
-    # Decay LR by a factor of 0.1 every 7 epochs
-    exp_lr_scheduler = lr_scheduler.StepLR(optimizer_conv, step_size=7, gamma=0.1)
-
-    print 'Training model...'
-    model_conv = train_model(model_conv, criterion, optimizer_conv,
-                             exp_lr_scheduler, num_epochs=25)
-    print 'Visualizing model'
+    #
+    # # Parameters of newly constructed modules have requires_grad=True by default
+    # num_ftrs = model_conv.fc.in_features
+    # model_conv.fc = nn.Linear(num_ftrs, len(class_names))
+    #
+    # model_conv = model_conv.to(device)
+    #
+    # criterion = nn.CrossEntropyLoss()
+    #
+    # # Observe that only parameters of final layer are being optimized as
+    # # opoosed to before.
+    # optimizer_conv = optim.SGD(model_conv.fc.parameters(), lr=0.01, momentum=0.9)
+    #
+    # # Decay LR by a factor of 0.1 every 7 epochs
+    # exp_lr_scheduler = lr_scheduler.StepLR(optimizer_conv, step_size=7, gamma=0.1)
+    #
+    # # Train model
+    # model_conv = train_model(model_conv, criterion, optimizer_conv,
+    #                          exp_lr_scheduler, num_epochs=25)
+    #
+    # visualize_model(model_conv)
+    #
+    # print('Saving model')
+    # timestamp = str(int(time.time()))
+    # today = datetime.today().strftime('%Y-%m-%d')
+    # model_filename = 'namethatdog_' + today + '_' + timestamp + '.pt'
+    # torch.save(model_conv, model_filename)
     visualize_model(model_conv)
 
     plt.ioff()
