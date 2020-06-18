@@ -7,6 +7,7 @@ import time
 import os
 import copy
 import torch
+import utils
 import torchvision
 import numpy as np
 import torch.nn as nn
@@ -105,7 +106,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
             # Iterate over data.
             step = 0
             # total = len(dataloaders[phase].dataset)
-            total = 100
+            total = 10000
             printProgressBar(step, total, prefix='Progress:',
                              suffix='Complete', length=100)
             for inputs, labels in dataloaders[phase]:
@@ -134,19 +135,27 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                 step += 1
                 printProgressBar(step, total, prefix='Progress:',
                                  suffix='Complete', length=100)
-                if step > total:
+                if step == total:
                     break
+            print()
 
             epoch_loss = running_loss / dataset_sizes[phase]
             epoch_acc = running_corrects.double() / dataset_sizes[phase]
 
             print('{} Loss: {:.4f} Acc: {:.4f}'.format(
                 phase, epoch_loss, epoch_acc))
-
             # deep copy the model
             if phase == 'val' and epoch_acc > best_acc:
                 best_acc = epoch_acc
                 best_model_wts = copy.deepcopy(model.state_dict())
+
+            # Keep track of loss per epoch
+            if phase == 'val':
+                plotter.plot('loss', 'val', 'Class Loss', epoch, epoch_loss)
+                plotter.plot('acc', 'val', 'Class Accuracy', epoch, epoch_acc)
+            else:
+                plotter.plot('loss', 'train', 'Class Loss', epoch, epoch_loss)
+
 
         print( '\n')
 
@@ -164,7 +173,7 @@ def set_parameter_requires_grad(model, feature_extracting):
         for param in model.parameters():
             param.requires_grad = False
 
-def visualize_model(model, num_images=10):
+def visualize_model_inference(model, num_images=10):
     was_training = model.training
     model.eval()
     images_so_far = 0
@@ -176,12 +185,16 @@ def visualize_model(model, num_images=10):
 
             outputs = model(inputs)
             _, preds = torch.max(outputs, 1)
+            sm = torch.nn.Softmax()
+            probabilities = sm(outputs)
+             #Converted to probabilities
 
             for j in range(inputs.size()[0]):
                 images_so_far += 1
+                probability = probabilities[j][preds[j]]
                 ax = plt.subplot(num_images//2, 2, images_so_far)
                 ax.axis('off')
-                ax.set_title('predicted: {}'.format(class_names[preds[j]]))
+                ax.set_title('predicted: {}, {}%'.format(class_names[preds[j]], probability))
                 imshow(inputs.cpu().data[j])
 
                 if images_so_far == num_images:
@@ -194,42 +207,50 @@ def load_model_for_evaluation(model_pth_file):
     model.eval()
     return model
 
+def plot_2d(training_loss, validation_loss, label1, label2):
+    plt.plot(training_loss,label=label1)
+    plt.plot(validation_loss, label=label2)
+    plt.legend()
+    plt.xlabel('epochs')
+    plt.show()
+
 if __name__ == '__main__':
+    global plotter
+    plotter = utils.VisdomLinePlotter(env_name='NameThatDog Plots')
+
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    # model_conv = torchvision.models.resnet18(pretrained=True)
-    #
-    model_conv = load_model_for_evaluation('namethatdog_2020-06-17_1592410161.pt')
+    model_conv = torchvision.models.resnet18(pretrained=True)
 
     for param in model_conv.parameters():
         param.requires_grad = False
-    #
-    # # Parameters of newly constructed modules have requires_grad=True by default
-    # num_ftrs = model_conv.fc.in_features
-    # model_conv.fc = nn.Linear(num_ftrs, len(class_names))
-    #
-    # model_conv = model_conv.to(device)
-    #
-    # criterion = nn.CrossEntropyLoss()
-    #
-    # # Observe that only parameters of final layer are being optimized as
-    # # opoosed to before.
-    # optimizer_conv = optim.SGD(model_conv.fc.parameters(), lr=0.01, momentum=0.9)
-    #
-    # # Decay LR by a factor of 0.1 every 7 epochs
-    # exp_lr_scheduler = lr_scheduler.StepLR(optimizer_conv, step_size=7, gamma=0.1)
-    #
-    # # Train model
-    # model_conv = train_model(model_conv, criterion, optimizer_conv,
-    #                          exp_lr_scheduler, num_epochs=25)
-    #
-    # visualize_model(model_conv)
-    #
-    # print('Saving model')
-    # timestamp = str(int(time.time()))
-    # today = datetime.today().strftime('%Y-%m-%d')
-    # model_filename = 'namethatdog_' + today + '_' + timestamp + '.pt'
-    # torch.save(model_conv, model_filename)
-    visualize_model(model_conv)
 
-    plt.ioff()
-    plt.show()
+    # Parameters of newly constructed modules have requires_grad=True by default
+    num_ftrs = model_conv.fc.in_features
+    model_conv.fc = nn.Linear(num_ftrs, len(class_names))
+
+    model_conv = model_conv.to(device)
+
+    criterion = nn.CrossEntropyLoss()
+
+    # Observe that only parameters of final layer are being optimized as
+    # opoosed to before.
+    optimizer_conv = optim.SGD(model_conv.fc.parameters(), lr=0.01, momentum=0.9)
+
+    # Decay LR by a factor of 0.1 every 7 epochs
+    exp_lr_scheduler = lr_scheduler.StepLR(optimizer_conv, step_size=7, gamma=0.1)
+
+    # Train model
+    model_conv = train_model(model_conv, criterion, optimizer_conv,exp_lr_scheduler, num_epochs=25)
+    # Visualize model
+    # plot_2d(training_loss_values, validation_loss_values, label1="Training Loss", label2="Validation Loss")
+    # plot_2d(training_acc_values, validation_acc_values, label1="Training Acc", label2="Validation Acc")
+    # visualize_model_inference(model_conv)
+
+    timestamp = str(int(time.time()))
+    today = datetime.today().strftime('%Y-%m-%d')
+    model_filename = 'namethatdog_' + today + '_' + timestamp + '.pt'
+    print('Saving model to {}'.format(model_filename))
+    torch.save(model_conv, model_filename)
+
+    # plt.ioff()
+    # plt.show()
