@@ -10,6 +10,7 @@ import time
 import urllib
 import argparse
 import requests
+import io
 
 DRIVER_PATH = "/Users/mattoor/Downloads/chromedriver"
 MAX_IMAGES = 100
