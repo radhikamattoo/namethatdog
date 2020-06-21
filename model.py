@@ -10,6 +10,7 @@ import torch
 import utils
 import torchvision
 import numpy as np
+from tqdm import tqdm
 import torch.nn as nn
 import torch.optim as optim
 from datetime import datetime
@@ -50,27 +51,6 @@ dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=4,
 dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val', 'test']}
 class_names = image_datasets['train'].classes
 
-def printProgressBar(iteration, total, prefix='', suffix='', decimals=1, length=100, fill='█'):
-    """
-    Call in a loop to create terminal progress bar
-    @params:
-        iteration   - Required  : current iteration (Int)
-        total       - Required  : total iterations (Int)
-        prefix      - Optional  : prefix string (Str)
-        suffix      - Optional  : suffix string (Str)
-        decimals    - Optional  : positive number of decimals in percent complete (Int)
-        length      - Optional  : character length of bar (Int)
-        fill        - Optional  : bar fill character (Str)
-    """
-    percent = ("{0:." + str(decimals) + "f}").format(100 *
-                                                     (iteration / float(total)))
-    filledLength = int(length * iteration // total)
-    bar = fill * filledLength + '-' * (length - filledLength)
-    print('\r %s |%s| %s%% %s' % (prefix, bar, percent, suffix), end='\r')
-    # Print New Line on Complete
-    if iteration == total:
-        print()
-
 def imshow(inp, title=None):
     """Imshow for Tensor."""
     inp = inp.numpy().transpose((1, 2, 0))
@@ -105,11 +85,9 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
 
             # Iterate over data.
             step = 0
-            # total = len(dataloaders[phase].dataset)
-            total = 10000
-            printProgressBar(step, total, prefix='Progress:',
-                             suffix='Complete', length=100)
-            for inputs, labels in dataloaders[phase]:
+            total = len(dataloaders[phase].dataset)
+            # total = 10000
+            for inputs, labels in tqdm(dataloaders[phase]):
                 inputs = inputs.to(device)
                 labels = labels.to(device)
 
@@ -133,8 +111,6 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
                 running_corrects += torch.sum(preds == labels.data)
 
                 step += 1
-                printProgressBar(step, total, prefix='Progress:',
-                                 suffix='Complete', length=100)
                 if step == total:
                     break
             print()
@@ -219,40 +195,40 @@ if __name__ == '__main__':
     plotter = utils.VisdomLinePlotter(env_name='NameThatDog Plots')
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model_conv = load_model_for_evaluation('namethatdog_2020-06-17_1592437633.pt')
-    visualize_model_inference(model_conv)
-    # model_conv = torchvision.models.resnet18(pretrained=True)
-    #
-    # for param in model_conv.parameters():
-    #     param.requires_grad = False
-    #
-    # # Parameters of newly constructed modules have requires_grad=True by default
-    # num_ftrs = model_conv.fc.in_features
-    # model_conv.fc = nn.Linear(num_ftrs, len(class_names))
-    #
-    # model_conv = model_conv.to(device)
-    #
-    # criterion = nn.CrossEntropyLoss()
-    #
-    # # Observe that only parameters of final layer are being optimized as
-    # # opoosed to before.
-    # optimizer_conv = optim.SGD(model_conv.fc.parameters(), lr=0.01, momentum=0.9)
-    #
-    # # Decay LR by a factor of 0.1 every 7 epochs
-    # exp_lr_scheduler = lr_scheduler.StepLR(optimizer_conv, step_size=7, gamma=0.1)
+    # model_conv = load_model_for_evaluation('namethatdog_2020-06-17_1592437633.pt')
+    # visualize_model_inference(model_conv)
+    model_conv = torchvision.models.resnet18(pretrained=True)
+
+    for param in model_conv.parameters():
+        param.requires_grad = False
+
+    # Parameters of newly constructed modules have requires_grad=True by default
+    num_ftrs = model_conv.fc.in_features
+    model_conv.fc = nn.Linear(num_ftrs, len(class_names))
+
+    model_conv = model_conv.to(device)
+
+    criterion = nn.CrossEntropyLoss()
+
+    # Observe that only parameters of final layer are being optimized as
+    # opoosed to before.
+    optimizer_conv = optim.SGD(model_conv.fc.parameters(), lr=0.01, momentum=0.9)
+
+    # Decay LR by a factor of 0.1 every 7 epochs
+    exp_lr_scheduler = lr_scheduler.StepLR(optimizer_conv, step_size=7, gamma=0.1)
 
     # Train model
-    # model_conv = train_model(model_conv, criterion, optimizer_conv,exp_lr_scheduler, num_epochs=25)
+    model_conv = train_model(model_conv, criterion, optimizer_conv,exp_lr_scheduler, num_epochs=25)
     # Visualize model
-    # plot_loss(training_loss_values, validation_loss_values, label1="Training Loss", label2="Validation Loss")
-    # plot_loss(training_acc_values, validation_acc_values, label1="Training Acc", label2="Validation Acc")
-    # visualize_model_inference(model_conv)
+    plot_loss(training_loss_values, validation_loss_values, label1="Training Loss", label2="Validation Loss")
+    plot_loss(training_acc_values, validation_acc_values, label1="Training Acc", label2="Validation Acc")
+    visualize_model_inference(model_conv)
 
-    # timestamp = str(int(time.time()))
-    # today = datetime.today().strftime('%Y-%m-%d')
-    # model_filename = 'modelsnamethatdog_' + today + '_' + timestamp + '.pt'
-    # print('Saving model to {}'.format(model_filename))
-    # torch.save(model_conv, model_filename)
+    timestamp = str(int(time.time()))
+    today = datetime.today().strftime('%Y-%m-%d')
+    model_filename = 'modelsnamethatdog_' + today + '_' + timestamp + '.pt'
+    print('Saving model to {}'.format(model_filename))
+    torch.save(model_conv, model_filename)
 
     plt.ioff()
     plt.show()

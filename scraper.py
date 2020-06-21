@@ -11,9 +11,11 @@ import urllib
 import argparse
 import requests
 import io
+from PIL import Image
+import hashlib
 
 DRIVER_PATH = "/Users/mattoor/Downloads/chromedriver"
-MAX_IMAGES = 100
+MAX_IMAGES = 50
 # 80-20 training-val split per dog breed
 MAX_TRAINING_IMAGES = int(MAX_IMAGES*.8)
 MAX_VALIDATION_IMAGES = MAX_IMAGES - MAX_TRAINING_IMAGES
