@@ -8,6 +8,7 @@ import os
 import copy
 import torch
 import utils
+import argparse
 import torchvision
 import numpy as np
 from tqdm import tqdm
@@ -86,7 +87,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
             # Iterate over data.
             step = 0
             total = len(dataloaders[phase].dataset)
-            # total = 10000
+            # total = 10
             for inputs, labels in tqdm(dataloaders[phase]):
                 inputs = inputs.to(device)
                 labels = labels.to(device)
@@ -149,7 +150,7 @@ def set_parameter_requires_grad(model, feature_extracting):
         for param in model.parameters():
             param.requires_grad = False
 
-def visualize_model_inference(model, num_images=20):
+def visualize_model(model, num_images):
     was_training = model.training
     model.eval()
     images_so_far = 0
@@ -183,52 +184,117 @@ def load_model_for_evaluation(model_pth_file):
     model.eval()
     return model
 
-def plot_loss(training_loss, validation_loss, label1, label2):
-    plt.plot(training_loss,label=label1)
-    plt.plot(validation_loss, label=label2)
-    plt.legend()
-    plt.xlabel('epochs')
-    plt.show()
-
 if __name__ == '__main__':
-    global plotter
-    plotter = utils.VisdomLinePlotter(env_name='NameThatDog Plots')
+    parser = argparse.ArgumentParser()
+    # Execution mode
+    parser.add_argument(
+        '--mode',
+        nargs='?',
+        choices=['train', 'eval'],
+        help='Execution mode')
+
+    # TRAIN HYPERPARAMS
+    parser.add_argument(
+        '--num-epochs',
+        default=10,
+        type=int,
+        help='Number of epochs')
+    parser.add_argument(
+        '--learning-rate',
+        default=0.00001,
+        type=float,
+        help='Learning rate')
+    parser.add_argument(
+        '--momentum',
+        default=0.9,
+        type=float,
+        help='Momentum')
+    parser.add_argument(
+        '--gamma',
+        default=0.1,
+        type=float,
+        help='Learning rate decay factor')
+    parser.add_argument(
+        '--step-size',
+        default=7,
+        type=int,
+        help='How often (in epochs) to decay the learning rate')
+
+    # EVAL OPTIONS
+    parser.add_argument(
+        '--model-file',
+        default='',
+        type=str,
+        help='Absolute path to model file to use for evaluation')
+    parser.add_argument(
+        '--num-images',
+        default=10,
+        type=int,
+        help='Number of images to use for evaluation')
+    args = parser.parse_args()
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    # model_conv = load_model_for_evaluation('namethatdog_2020-06-17_1592437633.pt')
-    # visualize_model_inference(model_conv)
-    model_conv = torchvision.models.resnet18(pretrained=True)
 
-    for param in model_conv.parameters():
-        param.requires_grad = False
+    if args.mode == "train":
+        # Visdom for plots
+        global plotter
+        plotter = utils.VisdomLinePlotter(env_name='NameThatDog Plots')
 
-    # Parameters of newly constructed modules have requires_grad=True by default
-    num_ftrs = model_conv.fc.in_features
-    model_conv.fc = nn.Linear(num_ftrs, len(class_names))
+        # Extract args
+        num_epochs = args.num_epochs
+        learning_rate = args.learning_rate
+        momentum = args.momentum
+        gamma = args.gamma
+        step_size = args.step_size
 
-    model_conv = model_conv.to(device)
+        print("Training new final layer of Resnet18 model for {} epochs with hyperparams: LR:{}, Momentum: {}, Gamma: {}, Step Size: {}".format(num_epochs, learning_rate, momentum, gamma, step_size))
 
-    criterion = nn.CrossEntropyLoss()
+        # Download pretrained resnet18 model
+        model_conv = torchvision.models.resnet18(pretrained=True)
 
-    # Observe that only parameters of final layer are being optimized as
-    # opoosed to before.
-    optimizer_conv = optim.SGD(model_conv.fc.parameters(), lr=0.01, momentum=0.9)
+        # Freeze existing layers
+        for param in model_conv.parameters():
+            param.requires_grad = False
 
-    # Decay LR by a factor of 0.1 every 7 epochs
-    exp_lr_scheduler = lr_scheduler.StepLR(optimizer_conv, step_size=7, gamma=0.1)
+        # Parameters of newly constructed modules have requires_grad=True by default
+        num_ftrs = model_conv.fc.in_features
 
-    # Train model
-    model_conv = train_model(model_conv, criterion, optimizer_conv,exp_lr_scheduler, num_epochs=25)
-    # Visualize model
-    plot_loss(training_loss_values, validation_loss_values, label1="Training Loss", label2="Validation Loss")
-    plot_loss(training_acc_values, validation_acc_values, label1="Training Acc", label2="Validation Acc")
-    visualize_model_inference(model_conv)
+        # Create new final layer to be trained/optimized on
+        model_conv.fc = nn.Linear(num_ftrs, len(class_names))
 
-    timestamp = str(int(time.time()))
-    today = datetime.today().strftime('%Y-%m-%d')
-    model_filename = 'modelsnamethatdog_' + today + '_' + timestamp + '.pt'
-    print('Saving model to {}'.format(model_filename))
-    torch.save(model_conv, model_filename)
+        model_conv = model_conv.to(device)
 
-    plt.ioff()
-    plt.show()
+        criterion = nn.CrossEntropyLoss()
+
+        # Observe that only parameters of final layer are being optimized as
+        # opoosed to before.
+        optimizer_conv = optim.SGD(model_conv.fc.parameters(), lr=learning_rate, momentum=momentum)
+
+        # Decay LR by a factor of 0.1 every 7 epochs
+        exp_lr_scheduler = lr_scheduler.StepLR(optimizer_conv, step_size=step_size, gamma=gamma)
+
+        # Train model
+        model_conv = train_model(model_conv, criterion, optimizer_conv, exp_lr_scheduler, num_epochs=num_epochs)
+
+        # Save
+        timestamp = str(int(time.time()))
+        today = datetime.today().strftime('%Y-%m-%d')
+        model_filename = os.path.join('models', 'namethatdog_' + today + '_' + timestamp + '.pt')
+        print('Saving model to {}'.format(model_filename))
+
+        torch.save(model_conv, model_filename)
+    elif args.mode == "eval":
+        path_to_model = args.model_file
+        num_images = args.num_images
+        print("Evaluating model file {} with {} images".format(path_to_model, num_images))
+        try:
+            model_conv = load_model_for_evaluation(path_to_model)
+        except Exception as e:
+            print("Error loading model: {}".format(e))
+            exit()
+        visualize_model(model_conv, num_images)
+        plt.ioff()
+        plt.show()
+    else:
+        print("No valid mode selected, exiting")
+        exit()
