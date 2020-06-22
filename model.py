@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Radhika Mattoo, rm3485@nyu.edu
+# Radhika Mattoo, radhika095@gmail.com
 # Code taken from:
 # https://pytorch.org/tutorials/beginner/transfer_learning_tutorial.html#sphx-glr-beginner-transfer-learning-tutorial-py
 
@@ -247,7 +247,7 @@ if __name__ == '__main__':
         gamma = args.gamma
         step_size = args.step_size
 
-        print("Training new final layer of Resnet18 model for {} epochs with hyperparams: LR:{}, Momentum: {}, Gamma: {}, Step Size: {}".format(num_epochs, learning_rate, momentum, gamma, step_size))
+        print("Training new final layer of Resnet18 model for {} Epochs with hyperparams: LR: {}, Momentum: {}, Gamma: {}, Step Size: {}".format(num_epochs, learning_rate, momentum, gamma, step_size))
 
         # Download pretrained resnet18 model
         model_conv = torchvision.models.resnet18(pretrained=True)
