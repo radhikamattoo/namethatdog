@@ -1,6 +1,8 @@
+import torch
 import numpy as np
 from visdom import Visdom
 from torchvision import transforms
+import matplotlib.pyplot as plt
 
 class VisdomLinePlotter(object):
     """Plots to Visdom"""
@@ -45,7 +47,7 @@ def get_data_transforms():
             transforms.Resize(256),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
-            # transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
     }
 
@@ -62,5 +64,5 @@ def imshow(inp, title=None):
     plt.pause(0.001)  # pause a bit so that plots are updated
 
 def load_model(model_pth_file):
-    model = torch.load(model_pth_file)
+    model = torch.load(model_pth_file, map_location=torch.device('cpu'))
     return model

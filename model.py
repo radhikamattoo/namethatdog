@@ -117,6 +117,7 @@ def evaluate_model(model, num_images):
     images_so_far = 0
     fig = plt.figure()
     actuals, probabilities = [], []
+    test_classes_to_idx = classes_to_idx['test']
     with torch.no_grad():
         for i, (inputs, labels) in enumerate(dataloaders['test']):
             inputs = inputs.to(device)
@@ -127,13 +128,14 @@ def evaluate_model(model, num_images):
             sm = torch.nn.Softmax()
             probabilities = sm(outputs)
              #Converted to probabilities
-
+            labels = labels.detach().cpu().numpy()
             for j in range(inputs.size()[0]):
                 images_so_far += 1
                 probability = probabilities[j][preds[j]]
+                label = test_classes_to_idx[labels[j]]
                 ax = plt.subplot(num_images//2, 2, images_so_far)
                 ax.axis('off')
-                ax.set_title('predicted: {}, {}%'.format(class_names[preds[j]], probability))
+                ax.set_title('predicted: {}, ({:.2f}), actual: {}'.format(class_names[preds[j]], probability, label))
                 imshow(inputs.cpu().data[j])
 
                 if images_so_far == num_images:
@@ -221,7 +223,7 @@ if __name__ == '__main__':
                       for x in ['train', 'val', 'test']}
 
     # Maps class_idx to its string label
-    classes_to_idx = {x: { class_idx: class_name for class_name, class_idx in image_datasets[x].class_to_idx .items()} for x in ['train', 'val', 'test']}
+    classes_to_idx = {x: { class_idx: class_name for class_name, class_idx in image_datasets[x].class_to_idx.items()} for x in ['train', 'val', 'test']}
 
     dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=batch_size,
                                                  shuffle=True, num_workers=4)
@@ -301,7 +303,7 @@ if __name__ == '__main__':
         num_images = args.num_images
         print("Evaluating model file {} with {} images".format(path_to_model, num_images))
         try:
-            model_conv = load_model_for_evaluation(path_to_model)
+            model_conv = load_model(path_to_model)
         except Exception as e:
             print("Error loading model: {}".format(e))
             exit()
