@@ -177,7 +177,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--decay',
         default=False,
-        type=bool,
+        action='store_true',
         help='Whether the learning rate should decay during training or not')
     parser.add_argument(
         '--gamma',
@@ -208,8 +208,8 @@ if __name__ == '__main__':
         help='Number of images to use for evaluation')
     parser.add_argument(
         '--using-pretrained',
-        default=True,
-        type=bool,
+        default=False,
+        action='store_true',
         help='Train from scratch or just the final layer?')
     args = parser.parse_args()
 
