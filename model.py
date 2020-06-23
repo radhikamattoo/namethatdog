@@ -8,7 +8,7 @@ import os
 import copy
 import torch
 import utils
-from utils import VisdomLinePlotter, get_data_transforms, plot_roc, imshow, evaluate_model, load_model
+from utils import VisdomLinePlotter, get_data_transforms, imshow, load_model
 import argparse
 import torchvision
 import numpy as np
@@ -108,6 +108,36 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs):
     # load best model weights
     model.load_state_dict(best_model_wts)
     return model
+
+def evaluate_model(model, num_images):
+    was_training = model.training
+    model.eval()
+    images_so_far = 0
+    fig = plt.figure()
+    actuals, probabilities = [], []
+    with torch.no_grad():
+        for i, (inputs, labels) in enumerate(dataloaders['test']):
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+
+            outputs = model(inputs)
+            _, preds = torch.max(outputs, 1)
+            sm = torch.nn.Softmax()
+            probabilities = sm(outputs)
+             #Converted to probabilities
+
+            for j in range(inputs.size()[0]):
+                images_so_far += 1
+                probability = probabilities[j][preds[j]]
+                ax = plt.subplot(num_images//2, 2, images_so_far)
+                ax.axis('off')
+                ax.set_title('predicted: {}, {}%'.format(class_names[preds[j]], probability))
+                imshow(inputs.cpu().data[j])
+
+                if images_so_far == num_images:
+                    model.train(mode=was_training)
+                    return
+        model.train(mode=was_training)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
