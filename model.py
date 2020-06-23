@@ -35,7 +35,8 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs):
         for phase in ['train', 'val']:
             class_to_idx = classes_to_idx[phase]
             if phase == 'train':
-                scheduler.step()
+                if scheduler:
+                    scheduler.step()
                 model.train()  # Set model to training mode
             else:
                 model.eval()   # Set model to evaluate mode
@@ -171,6 +172,11 @@ if __name__ == '__main__':
         type=float,
         help='Momentum')
     parser.add_argument(
+        '--decay',
+        default=False,
+        type=bool,
+        help='Whether the learning rate should decay during training or not')
+    parser.add_argument(
         '--gamma',
         default=0.1,
         type=float,
@@ -231,10 +237,11 @@ if __name__ == '__main__':
         num_epochs = args.num_epochs
         learning_rate = args.learning_rate
         momentum = args.momentum
+        decay = args.decay
         gamma = args.gamma
         step_size = args.step_size
 
-        print("Training new final layer of Resnet18 model for {} Epochs with hyperparams: LR: {}, Momentum: {}, Gamma: {}, Step Size: {}, Batch Size: {}".format(num_epochs, learning_rate, momentum, gamma, step_size, batch_size))
+        print("Training new final layer of Resnet18 model for {} Epochs with hyperparams: LR: {}, Momentum: {}, Decay: {}, Gamma: {}, Step Size: {}, Batch Size: {}".format(num_epochs, learning_rate, momentum, decay, gamma, step_size, batch_size))
 
         # Download pretrained resnet18 model
         model_conv = torchvision.models.resnet18(pretrained=True)
@@ -257,8 +264,10 @@ if __name__ == '__main__':
         # opoosed to before.
         optimizer_conv = optim.SGD(model_conv.fc.parameters(), lr=learning_rate, momentum=momentum)
 
-        # Decay LR by a factor of 0.1 every 7 epochs
-        exp_lr_scheduler = lr_scheduler.StepLR(optimizer_conv, step_size=step_size, gamma=gamma)
+        exp_lr_scheduler = None
+        if decay:
+            # Decay LR by a factor of 0.1 every 7 epochs
+            exp_lr_scheduler = lr_scheduler.StepLR(optimizer_conv, step_size=step_size, gamma=gamma)
 
         # Train model
         model_conv = train_model(model_conv, criterion, optimizer_conv, exp_lr_scheduler, num_epochs=num_epochs)
