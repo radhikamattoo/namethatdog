@@ -203,7 +203,7 @@ if __name__ == '__main__':
         gamma = args.gamma
         step_size = args.step_size
 
-        print("Training new final layer of Resnet18 model for {} Epochs with hyperparams: LR: {}, Momentum: {}, Gamma: {}, Step Size: {}".format(num_epochs, learning_rate, momentum, gamma, step_size))
+        print("Training new final layer of Resnet18 model for {} Epochs with hyperparams: LR: {}, Momentum: {}, Gamma: {}, Step Size: {}, Batch Size: {}".format(num_epochs, learning_rate, momentum, gamma, step_size, batch_size))
 
         # Download pretrained resnet18 model
         model_conv = torchvision.models.resnet18(pretrained=True)
