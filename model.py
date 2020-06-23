@@ -85,9 +85,6 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs):
 
             # Keep track of loss per epoch
             if phase == 'val':
-                print()
-                print(type(epoch), type(epoch_acc), type(epoch_acc.cpu().detach().numpy()))
-                print()
                 plotter.plot('loss', 'val', 'Class Loss', epoch, epoch_loss)
                 plotter.plot('acc', 'val', 'Class Accuracy', epoch, epoch_acc.cpu().detach().numpy())
                 name_preds = [class_to_idx[p] for p in preds.detach().cpu().numpy()]
