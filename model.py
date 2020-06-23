@@ -8,7 +8,7 @@ import os
 import copy
 import torch
 import utils
-from utils import VisdomLinePlotter, get_data_transforms, imshow, load_model
+import json
 import argparse
 import torchvision
 import numpy as np
@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 import torchvision.models as models
 from torch.optim import lr_scheduler
 from torchvision import datasets, models, transforms
+from utils import VisdomLinePlotter, get_data_transforms, imshow, load_model
 
 def train_model(model, criterion, optimizer, scheduler, num_epochs):
     since = time.time()
@@ -272,13 +273,29 @@ if __name__ == '__main__':
         # Train model
         model_conv = train_model(model_conv, criterion, optimizer_conv, exp_lr_scheduler, num_epochs=num_epochs)
 
-        # Save
+        # Save model
         timestamp = str(int(time.time()))
         today = datetime.today().strftime('%Y-%m-%d')
-        model_filename = os.path.join('models', 'namethatdog_' + today + '_' + timestamp + '.pt')
-        print('Saving model to {}'.format(model_filename))
+        filename = 'namethatdog_' + today + '_' + timestamp
 
+        model_filename = os.path.join('models', filename + '.pt')
+        print('Saving model to {}'.format(model_filename))
         torch.save(model_conv, model_filename)
+
+        # Save hyperparam data for traceability
+        hyperparams = {
+            "batch_size": batch_size,
+            "num_epochs": num_epochs,
+            "learning_rate": learning_rate,
+            "momentum": momentum,
+            "decay": decay,
+            "gamma": gamma,
+            "step_size": step_size
+        }
+        model_hyperparams_filename = os.path.join('models', filename + '.json')
+        print('Saving model hyperparams to {}'.format(model_hyperparams_filename))
+        with open(model_hyperparams_filename, 'w') as f:
+            json.dump(hyperparams, f, indent=2)
     elif args.mode == "eval":
         path_to_model = args.model_file
         num_images = args.num_images
