@@ -8,6 +8,7 @@ import os
 import copy
 import torch
 import utils
+from utils import VisdomLinePlotter, get_data_transforms, plot_roc, imshow, evaluate_model, load_model
 import argparse
 import torchvision
 import numpy as np
@@ -20,51 +21,7 @@ import torchvision.models as models
 from torch.optim import lr_scheduler
 from torchvision import datasets, models, transforms
 
-# Read in data
-data_transforms = {
-    'train': transforms.Compose([
-        transforms.RandomResizedCrop(224),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ]),
-    'val': transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ]),
-    'test': transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
-}
-
-data_dir = 'data'
-image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x),
-                                          data_transforms[x])
-                  for x in ['train', 'val', 'test']}
-dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=4,
-                                             shuffle=True, num_workers=4)
-              for x in ['train', 'val', 'test']}
-dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val', 'test']}
-class_names = image_datasets['train'].classes
-
-def imshow(inp, title=None):
-    """Imshow for Tensor."""
-    inp = inp.numpy().transpose((1, 2, 0))
-    mean = np.array([0.485, 0.456, 0.406])
-    std = np.array([0.229, 0.224, 0.225])
-    inp = std * inp + mean
-    inp = np.clip(inp, 0, 1)
-    plt.imshow(inp)
-    if title is not None:
-        plt.title(title)
-    plt.pause(0.001)  # pause a bit so that plots are updated
-
-def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
+def train_model(model, criterion, optimizer, scheduler, num_epochs):
     since = time.time()
 
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -76,6 +33,7 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
 
         # Each epoch has a training and validation phase
         for phase in ['train', 'val']:
+            class_to_idx = classes_to_idx[phase]
             if phase == 'train':
                 scheduler.step()
                 model.train()  # Set model to training mode
@@ -87,7 +45,6 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
             # Iterate over data.
             step = 0
             total = len(dataloaders[phase].dataset)
-            # total = 10
             for inputs, labels in tqdm(dataloaders[phase]):
                 inputs = inputs.to(device)
                 labels = labels.to(device)
@@ -130,10 +87,17 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
             if phase == 'val':
                 plotter.plot('loss', 'val', 'Class Loss', epoch, epoch_loss)
                 plotter.plot('acc', 'val', 'Class Accuracy', epoch, epoch_acc)
+                name_preds = [class_to_idx[p] for p in preds.detach().cpu().numpy()]
+                labels = [class_to_idx[l] for l in labels.detach().cpu().numpy()]
+                caption = ""
+                for idx in range(len(labels)):
+                    label = labels[idx]
+                    prediction = name_preds[idx]
+                    caption += label + " vs. " + prediction + " |\t"
+                plotter.images(inputs, win='x', opts=dict(title='Label vs. Prediction in epoch {}'.format(epoch), caption=caption))
+
             else:
                 plotter.plot('loss', 'train', 'Class Loss', epoch, epoch_loss)
-
-
         print( '\n')
 
     time_elapsed = time.time() - since
@@ -145,53 +109,20 @@ def train_model(model, criterion, optimizer, scheduler, num_epochs=25):
     model.load_state_dict(best_model_wts)
     return model
 
-def set_parameter_requires_grad(model, feature_extracting):
-    if feature_extracting:
-        for param in model.parameters():
-            param.requires_grad = False
-
-def visualize_model(model, num_images):
-    was_training = model.training
-    model.eval()
-    images_so_far = 0
-    fig = plt.figure()
-    with torch.no_grad():
-        for i, (inputs, labels) in enumerate(dataloaders['test']):
-            inputs = inputs.to(device)
-            labels = labels.to(device)
-
-            outputs = model(inputs)
-            _, preds = torch.max(outputs, 1)
-            sm = torch.nn.Softmax()
-            probabilities = sm(outputs)
-             #Converted to probabilities
-
-            for j in range(inputs.size()[0]):
-                images_so_far += 1
-                probability = probabilities[j][preds[j]]
-                ax = plt.subplot(num_images//2, 2, images_so_far)
-                ax.axis('off')
-                ax.set_title('predicted: {}, {}%'.format(class_names[preds[j]], probability))
-                imshow(inputs.cpu().data[j])
-
-                if images_so_far == num_images:
-                    model.train(mode=was_training)
-                    return
-        model.train(mode=was_training)
-
-def load_model_for_evaluation(model_pth_file):
-    model = torch.load(model_pth_file)
-    model.eval()
-    return model
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    # Execution mode
+    # EXECUTION
     parser.add_argument(
         '--mode',
         nargs='?',
         choices=['train', 'eval'],
         help='Execution mode')
+    # DATA INFO
+    parser.add_argument(
+        '--data-dir',
+        default='data',
+        type=str,
+        help='Directory where train/val/test data is stored')
 
     # TRAIN HYPERPARAMS
     parser.add_argument(
@@ -219,6 +150,11 @@ if __name__ == '__main__':
         default=7,
         type=int,
         help='How often (in epochs) to decay the learning rate')
+    parser.add_argument(
+        '--batch-size',
+        default=32,
+        type=int,
+        help='Number of images trained on before backprop is applied')
 
     # EVAL OPTIONS
     parser.add_argument(
@@ -233,7 +169,27 @@ if __name__ == '__main__':
         help='Number of images to use for evaluation')
     args = parser.parse_args()
 
+    # CPU or GPU device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    # Args for loading data
+    data_dir = args.data_dir
+    batch_size = args.batch_size
+    data_transforms = get_data_transforms()
+
+    # Load in and transform data
+    image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x),
+                                              data_transforms[x])
+                      for x in ['train', 'val', 'test']}
+
+    # Maps class_idx to its string label
+    classes_to_idx = {x: { class_idx: class_name for class_name, class_idx in image_datasets[x].class_to_idx .items()} for x in ['train', 'val', 'test']}
+
+    dataloaders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=batch_size,
+                                                 shuffle=True, num_workers=4)
+                  for x in ['train', 'val', 'test']}
+    dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val', 'test']}
+    class_names = image_datasets['train'].classes
 
     if args.mode == "train":
         # Visdom for plots
@@ -292,7 +248,7 @@ if __name__ == '__main__':
         except Exception as e:
             print("Error loading model: {}".format(e))
             exit()
-        visualize_model(model_conv, num_images)
+        evaluate_model(model_conv, num_images)
         plt.ioff()
         plt.show()
     else:
