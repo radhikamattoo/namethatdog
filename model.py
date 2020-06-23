@@ -206,6 +206,11 @@ if __name__ == '__main__':
         default=10,
         type=int,
         help='Number of images to use for evaluation')
+    parser.add_argument(
+        '--using-pretrained',
+        default=True,
+        type=bool,
+        help='Train from scratch or just the final layer?')
     args = parser.parse_args()
 
     # CPU or GPU device
@@ -243,15 +248,20 @@ if __name__ == '__main__':
         decay = args.decay
         gamma = args.gamma
         step_size = args.step_size
+        using_pretrained = args.using_pretrained
 
         print("Training new final layer of Resnet18 model for {} Epochs with hyperparams: LR: {}, Momentum: {}, Decay: {}, Gamma: {}, Step Size: {}, Batch Size: {}".format(num_epochs, learning_rate, momentum, decay, gamma, step_size, batch_size))
 
         # Download pretrained resnet18 model
         model_conv = torchvision.models.resnet18(pretrained=True)
 
-        # Freeze existing layers
-        for param in model_conv.parameters():
-            param.requires_grad = False
+        if using_pretrained:
+            print("Freezing existing layers of model")
+            # Freeze existing layers
+            for param in model_conv.parameters():
+                param.requires_grad = False
+        else:
+            print("NOT freezing existing layers of model")
 
         # Parameters of newly constructed modules have requires_grad=True by default
         num_ftrs = model_conv.fc.in_features
@@ -292,7 +302,8 @@ if __name__ == '__main__':
             "momentum": momentum,
             "decay": decay,
             "gamma": gamma,
-            "step_size": step_size
+            "step_size": step_size,
+            "using_pretrained": using_pretrained
         }
         model_hyperparams_filename = os.path.join('models', filename + '.json')
         print('Saving model hyperparams to {}'.format(model_hyperparams_filename))
